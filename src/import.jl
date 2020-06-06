@@ -1,23 +1,51 @@
 module Import
 
+using Femutils
+
 using LightXML
 using JuAFEM
 using Base.Iterators
 
 export import_grid
 
-function import_grid(path::AbstractString)::Grid
+# TODO quadratic versions
+cell_types = Dict(
+    "line" => Line,
+    "triangle" => Triangle,
+    "quadrilateral" => Quadrilateral,
+    "tetrahedron" => Tetrahedron,
+    "hexahedron" => Hexahedron,
+)
+
+struct MeshXML
+    vertices
+    cells
+    dim::Int
+    celltype
+end
+
+# TODO find a way to dispatch on expected output format (connectivity/JuAFEM)
+# TODO handle mixed type meshes
+
+"""
+Import a Fenics grid as either raw `(nodes,connectivity_matrix)` or as JuAFEM's
+`Grid`. The `output` keyword argument can be set to :`connectivity_matrix` (default) 
+or :`juafem_grid`.
+"""
+function import_grid(path::AbstractString; output=:connectivity_matrix)
+xml_mesh = parse_XML(path)
+
+if output == :connectivity_matrix
+    mesh = import_connectivity(xml_mesh)
+elseif output == :juafem_grid
+    mesh = import_juafem(xml_mesh)
+end
+    return mesh
+end
+
+function parse_XML(path::AbstractString)
     isfile(path) || error("$path not found.")
 
-    # TODO quadratic versions
-    cell_types = Dict(
-        "line" => Line,
-        "triangle" => Triangle,
-        "quadrilateral" => Quadrilateral,
-        "tetrahedron" => Tetrahedron,
-        "hexahedron" => Hexahedron,
-    )
-    
     xml = parse_file(path)
 
     xml_root = root(xml)
@@ -36,34 +64,56 @@ function import_grid(path::AbstractString)::Grid
     mesh_attributes["celltype"] ∈ keys(cell_types) || 
         error("Cell type '$(mesh_attributes["celltype"])' not recognized.")
 
-    @info "Cell type in this mesh: $(mesh_attributes["celltype"])"
-
     mesh_dim = parse(Int32, mesh_attributes["dim"])
 
-    mesh_dim ∈ [2,3] || error("Found a mesh dimension outside of 2 and 3.")
+    mesh_dim ∈ [1,2,3] || error("Found a mesh dimension outside of 2 and 3.")
 
-    @info "This mesh is $(mesh_dim)D"
+    MeshXML(vertices,cells,mesh_dim,cell_types[mesh_attributes["celltype"]])
+end
 
+function import_connectivity(raw::MeshXML)
     # nodes
-    nodes = Vector{Node{3,Float64}}(undef, size(vertices,1))
-    for (idx, vertex) in enumerate(vertices)
+    nodes = Array{Float64}(undef, size(raw.vertices,1), raw.dim)
+
+    for (idx, vertex) in enumerate(raw.vertices)
         p = parse.(Float64, value.(drop(attributes(vertex), 1)))
 
-        nodes[idx] = Node{3,Float64}(Tuple(p))
+        nodes[idx,:] .= p
     end
 
     # cells
-    cell_type = cell_types[mesh_attributes["celltype"]]
+    n = JuAFEM.nnodes(raw.celltype)
 
-    connectivity = Vector{cell_type}(undef, size(cells,1))
-    for (idx, cell) in enumerate(cells)
+    connectivity = Array{Int32}(undef,size(raw.cells,1),n)
+    for (idx, cell) in enumerate(raw.cells)
+        # 0-based to 1-based indexing, skip first column
+        p = parse.(Int32, value.(attributes(cell))) .+ 1
+
+        connectivity[idx,:] .= p[2:end]
+    end
+
+    (nodes, connectivity)    
+end
+
+function import_juafem(raw::MeshXML)
+    # nodes
+    nodes = Vector{Node{raw.dim,Float64}}(undef, size(raw.vertices,1))
+    for (idx, vertex) in enumerate(raw.vertices)
+        p = parse.(Float64, value.(drop(attributes(vertex), 1)))
+
+        nodes[idx] = Node(Tuple(p))
+    end
+
+    # cells
+    connectivity = Vector{raw.celltype}(undef, size(raw.cells,1))
+    for (idx, cell) in enumerate(raw.cells)
         # 0-based to 1-based indexing, skip first column
         p = parse.(Int64, value.(attributes(cell))) .+ 1
 
-        connectivity[idx] = cell_type(Tuple(p[2:end]))
+        connectivity[idx] = raw.celltype(Tuple(p[2:end]))
     end
 
     Grid(connectivity,nodes)
 end
 
-end
+end # module
