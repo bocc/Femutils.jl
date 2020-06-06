@@ -39,7 +39,10 @@ if output == :connectivity_matrix
     mesh = import_connectivity(xml_mesh)
 elseif output == :juafem_grid
     mesh = import_juafem(xml_mesh)
+else
+    error("Expected output format $output was not recognized.")
 end
+
     return mesh
 end
 
