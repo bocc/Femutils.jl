@@ -13,6 +13,11 @@ include("import.jl")
 using .Import
 export import_grid
 
+include("convert.jl")
+
+using .Convert
+export juagrid2cm
+
 # include("plot.jl")
 
 end # module
