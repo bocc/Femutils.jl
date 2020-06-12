@@ -18,6 +18,11 @@ include("convert.jl")
 using .Convert
 export juagrid2cm
 
+include("boundary.jl")
+
+using .Boundary
+export find_boundary
+
 # include("plot.jl")
 
 end # module
