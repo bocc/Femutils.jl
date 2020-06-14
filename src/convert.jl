@@ -1,9 +1,3 @@
-module Convert
-
-using JuAFEM
-
-export juagrid2cm
-
 # TODO facesets export
 """
 Converts a JuAFEM grid to (nodes,connectivity) representation
@@ -25,5 +19,3 @@ function juagrid2cm(grid::Grid)
 
     (nodes, connectivity)
 end
-
-end # module

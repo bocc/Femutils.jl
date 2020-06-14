@@ -21,6 +21,7 @@ function find_boundary(connectivity::Matrix{T}) where T <: Integer
     faces = Dict(1 => [1,2,3], 2 => [1,2,4], 3 => [2,3,4], 4 => [1,4,3])
     # TODO triangle, quadrilateral, etc
 
+    # TODO this is not resistant to invalid (non-manifold) meshes!
     h = Dict{Vector,Tuple}()
     for (t, r) in enumerate(eachrow(connectivity))
         for f in keys(faces)
